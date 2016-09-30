@@ -1,0 +1,11 @@
+@LayoutPage BaseTemplate
+
+   <h2>Companies</h2>
+   
+   <ul>
+@foreach dataset {
+  <li>@loop.company -- @loop.city (@loop.state, @loop.country)</li>
+}
+    
+   </ul>
+
