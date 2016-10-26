@@ -184,6 +184,7 @@ type
     FOnPageError: TRazorLogEvent;
     FAliases: TStrings;
     FPathInits: TRazorPathInitCollection;
+    FBasePath: string;
     procedure SetFilesFolder(const Value: string);
     procedure SetTemplatesFolder(const Value: string);
     procedure SetRazorValueEvent(const Value: TRazorValueEvent);
@@ -194,6 +195,7 @@ type
     procedure SetHomePage(const Value: string);
     procedure SetOnScaffolding(const Value: TRazorScaffoldingEvent);
     procedure ProcessPath (strPath: string; sList: TStringList);
+    procedure StripPath(sPath: TStringList; const PathToStrip: string);
     procedure SetDictionaryDuplicates(const Value: TDictionaryDuplicates);
     procedure SetErrorPage(const Value: string);
     procedure SetAliases(const Value: TStrings);
@@ -220,6 +222,7 @@ type
       const Item: TRazDictItem; Action: TCollectionNotification);
   published
     // properties
+    property BasePath: string read FBasePath write FBasePath;
     property PathInits: TRazorPathInitCollection read FPathInits write SetPathInits;
     property FilesFolder: string read FFilesFolder write SetFilesFolder;
     property TemplatesFolder: string read FTemplatesFolder
@@ -1540,47 +1543,53 @@ function TRlxRazorEngine.ProcessRequest(Request: TWebRequest;
 var
   pathInfo: string;
   razorProc: TRlxRazorProcessor;
-  sList: TStringList;
+  sList, sInFolderList, sBasePathList: TStringList;
   ext: string;
   pageInfo: TPageInfo;
   FilePath, subFolder, strAlias: string;
   execData: TRazorExecData;
+  LIndex: Integer;
 begin
   pathInfo := Trim(string(Request.InternalPathInfo));
   // normalize path, remove initial /
   if (length(pathInfo) > 0) and (pathInfo[1] = '/') then
     Delete(pathInfo, 1, 1);
-  // set .htm as .html
-  if ExtractFileExt(pathInfo) = '.htm' then
-    pathInfo := pathInfo + 'l'; // TODO: actual file extension as a property
-  if pathInfo = '' then
-    pathInfo := FHomePage; // TODO: make a property, with default
 
-  if pathInfo = '' then // if this is still empty
-    raise Exception.Create ('Cannot process request with no path and no homepage');
-
-  pageInfo := TPageInfo.Create;
+  sList := TStringList.Create;
   try
-    // page information
-    pageInfo.Referer := string(Request.Referer);
-    pageInfo.Browser := string(Request.UserAgent); // clean up and make usable
-    pageInfo.Address := string(Request.RemoteAddr);
+    // loads the path elements in a string list
+    ProcessPath (pathInfo, sList);
 
-    // user information
-    pageInfo.UserLogged := LoggedUser;
-    pageInfo.UserRole := userRoles;
+    // get the extension and remove it from the path elements
+    ext := ExtractFileExt (sList[sList.Count-1]);
+    sList[sList.Count-1] := ChangeFileExt (sList[sList.Count-1], '');
 
-    sList := TStringList.Create;
+    // set .htm as .html
+    if ext = '.htm' then
+      ext := ext + 'l'; // TODO: actual file extension as a property
+
+    if BasePath <> '' then
+      StripPath(sList, BasePath);
+
+    if sList.Count = 0 then
+      sList.Add(FHomePage); // TODO: make a property, with default
+
+    if sList.Count = 0 then // if this is still empty
+      raise Exception.Create ('Cannot process request with no path and no homepage');
+
+    pageInfo := TPageInfo.Create;
     try
-      // loads the path elements in a string list
-      ProcessPath (pathInfo, sList);
-      // get the extension and remove it from the path elements
-      ext := ExtractFileExt (sList[sList.Count-1]);
-      sList[sList.Count-1] := ChangeFileExt (sList[sList.Count-1], '');
+      // page information
+      pageInfo.Referer := string(Request.Referer);
+      pageInfo.Browser := string(Request.UserAgent); // clean up and make usable
+      pageInfo.Address := string(Request.RemoteAddr);
+
+      // user information
+      pageInfo.UserLogged := LoggedUser;
+      pageInfo.UserRole := userRoles;
 
       // process from specific folder and remove it
-      if inFolder <> '' then
-        sList.Delete(0);
+      StripPath(sList, inFolder);
 
       subFolder := '';
       // direct page request, go for the HTML with no params
@@ -1619,62 +1628,62 @@ begin
   //        Response.ReasonString := 'File not found';
         Exit;
       end;
-    finally
-      sList.Free;
-    end;
 
-    // look for alias, if found replace the page name
-    strAlias := FAliases.Values [pageInfo.Page];
-    if strAlias <> '' then
-      pageInfo.Page := strAlias;
+      // look for alias, if found replace the page name
+      strAlias := FAliases.Values [pageInfo.Page];
+      if strAlias <> '' then
+        pageInfo.Page := strAlias;
 
-    // HTML file to read
-    if SameText (ext, '.js') then
-      // TODO: add a property in the component at least with the base path
-      // or with a path file mapping
-      FilePath := '../' + inFolder + '/' + pageInfo.Page + '.js'
-    else
-      FilePath := FFilesFolder + subFolder + pageInfo.Page + '.html';
+      // HTML file to read
+      if SameText (ext, '.js') then
+        // TODO: add a property in the component at least with the base path
+        // or with a path file mapping
+        FilePath := '../' + inFolder + '/' + pageInfo.Page + '.js'
+      else
+        FilePath := FFilesFolder + subFolder + pageInfo.Page + '.html';
 
-    if not FileExists(FilePath) then
-    begin
-      if Assigned (FOnPageError) then
-        FOnPageError (self, pageInfo);
-
-      if FErrorPage <> '' then
+      if not FileExists(FilePath) then
       begin
-        FilePath := FFilesFolder + FErrorPage;
-        if not FileExists(FilePath) then
+        if Assigned (FOnPageError) then
+          FOnPageError (self, pageInfo);
+
+        if FErrorPage <> '' then
         begin
-          Found := False;
-          Result := '';
-          Exit;
+          FilePath := FFilesFolder + FErrorPage;
+          if not FileExists(FilePath) then
+          begin
+            Found := False;
+            Result := '';
+            Exit;
+          end;
         end;
       end;
-    end;
 
-    Found := True;
-    razorProc := TRlxRazorProcessor.Create(nil);
-    try
-      if Assigned (FOnPageLog) then
-        FOnPageLog (self, pageInfo);
-      razorProc.RazorEngine := self;
-      razorProc.InputFilename := FilePath;
-      razorProc.UserLoggedIn := LoggedUser;
-      razorProc.UserRoles := userRoles;
-      razorProc.LanguageID := LanguageID;
-      razorproc.AddToDictionary ('page', pageInfo, False);
-      execData.PathInfo := pageInfo.Page;
-      execData.PathParam := pageInfo.Item;
-      execData.razorProc := razorProc;
-      ConnectObjectForPath (execData);
-      razorProc.Request := Request; // passed manually
-      Result := razorProc.Content;
+      Found := True;
+      razorProc := TRlxRazorProcessor.Create(nil);
+      try
+        if Assigned (FOnPageLog) then
+          FOnPageLog (self, pageInfo);
+        razorProc.RazorEngine := self;
+        razorProc.InputFilename := FilePath;
+        razorProc.UserLoggedIn := LoggedUser;
+        razorProc.UserRoles := userRoles;
+        razorProc.LanguageID := LanguageID;
+        razorproc.AddToDictionary ('page', pageInfo, False);
+        execData.PathInfo := pageInfo.Page;
+        execData.PathParam := pageInfo.Item;
+        execData.razorProc := razorProc;
+        ConnectObjectForPath (execData);
+        razorProc.Request := Request; // passed manually
+        Result := razorProc.Content;
+      finally
+        razorProc.Free;
+      end;
     finally
-      razorProc.Free;
+      pageInfo.Free;
     end;
   finally
-    pageInfo.Free;
+    sList.Free;
   end;
 end;
 
@@ -1737,6 +1746,23 @@ end;
 procedure TRlxRazorEngine.SetTemplatesFolder(const Value: string);
 begin
   FTemplatesFolder := Value;
+end;
+
+procedure TRlxRazorEngine.StripPath(sPath: TStringList; const PathToStrip: string);
+var
+  sPathToStrip: TStringList;
+  LIndex: Integer;
+begin
+  sPathToStrip := TStringList.Create;
+  try
+    ProcessPath (PathToStrip, sPathToStrip);
+    if sPathToStrip.Count > 0 then
+      for LIndex := 0 to sPathToStrip.Count-1 do
+        if (sPath.Count > 0) and SameText(sPathToStrip[LIndex], sPath[0]) then
+          sPath.Delete(0);
+  finally
+    sPathToStrip.Free;
+  end;
 end;
 
 { TRazDictItem }
