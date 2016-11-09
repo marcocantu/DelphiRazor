@@ -1543,12 +1543,11 @@ function TRlxRazorEngine.ProcessRequest(Request: TWebRequest;
 var
   pathInfo: string;
   razorProc: TRlxRazorProcessor;
-  sList, sInFolderList, sBasePathList: TStringList;
+  sList: TStringList;
   ext: string;
   pageInfo: TPageInfo;
   FilePath, subFolder, strAlias: string;
   execData: TRazorExecData;
-  LIndex: Integer;
 begin
   pathInfo := Trim(string(Request.InternalPathInfo));
   // normalize path, remove initial /
