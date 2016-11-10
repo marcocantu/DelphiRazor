@@ -479,6 +479,7 @@ var
   TokenAfterDot: string;
   bResult: Boolean;
   item: TRazDictItem;
+  dictObj: TObject;
 begin
   Result := False;
   // if followed by ., read the next element
@@ -503,10 +504,17 @@ begin
   begin
     // generic processing
     if DataObjects.TryGetValue (TokenStr, item) then
-      Result := GetDictionaryValue(item, TokenAfterDot) <> ''
+    begin
+      if EvalObjectProperty (item.TheObject, TokenAfterDot, bResult) then
+        Result := bResult;
+    end
     else if Assigned (RazorEngine) and RazorEngine.DataObjects.TryGetValue (TokenStr, item) then
-      Result := GetDictionaryValue(item, TokenAfterDot) <> ''
+    begin
+       if EvalObjectProperty (item.TheObject, TokenAfterDot, bResult) then
+        Result := bResult
+    end
     else
+      // TODO add an eval method for booleans?
       Result := GetOtherValue(TokenStr, TokenAfterDot) <> '';
   end;
 end;
@@ -1561,8 +1569,12 @@ begin
     ProcessPath (pathInfo, sList);
 
     // get the extension and remove it from the path elements
-    ext := ExtractFileExt (sList[sList.Count-1]);
-    sList[sList.Count-1] := ChangeFileExt (sList[sList.Count-1], '');
+    ext := '';
+    if sList.Count > 0 then
+    begin
+      ext := ExtractFileExt (sList[sList.Count-1]);
+      sList[sList.Count-1] := ChangeFileExt (sList[sList.Count-1], '');
+    end;
 
     // set .htm as .html
     if ext = '.htm' then
@@ -1638,9 +1650,9 @@ begin
       if SameText (ext, '.js') then
         // TODO: add a property in the component at least with the base path
         // or with a path file mapping
-        FilePath := '../' + inFolder + '/' + pageInfo.Page + '.js'
+        FilePath := ChangeFileExt ('../' + inFolder + '/' + pageInfo.Page, '.js')
       else
-        FilePath := FFilesFolder + subFolder + pageInfo.Page + '.html';
+        FilePath := ChangeFileExt (FFilesFolder + subFolder + pageInfo.Page, '.html');
 
       if not FileExists(FilePath) then
       begin
