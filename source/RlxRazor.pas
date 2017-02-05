@@ -279,7 +279,7 @@ type
     procedure SetRazorValueEvent(const Value: TRazorValueEvent);
     function ProcessDottedValue(TokenStr: string; Parser: TCopyParser;
       Encoding: TEncoding): string;
-    function EvalDottedValue(TokenStr: string; Parser: TCopyParser;
+    function EvalBooleanDottedValue(TokenStr: string; Parser: TCopyParser;
       Encoding: TEncoding): Boolean;
     procedure SetOnLang(const Value: TRazorLanguageEvent);
     procedure SetRazorWarnEvent(const Value: TRazorWarnEvent);
@@ -297,9 +297,9 @@ type
     function GetSubObject(anObj: TObject; const propName: string; var retObj: TObject): Boolean;
     function GetLoopOrDictionaryObject(const LoopObjTokenStr, LoopVarTokenStr: string): TObject;
     function GetCurrenctObject(const LoopVarTokenStr: string): TObject;
-    function EvalLoopDottedValue(LoopVar: TRazLoopVar; Parser: TCopyParser;
+    function EvalBooleanLoopDottedValue(LoopVar: TRazLoopVar; Parser: TCopyParser;
       Encoding: TEncoding): Boolean;
-    function EvalObjectProperty(anObj: TObject; const propName: string;
+    function EvalBooleanObjectProperty(anObj: TObject; const propName: string;
       var Value: Boolean): Boolean;
   protected
     function RazorContentFromStream(AStream: TStream): string;
@@ -473,7 +473,7 @@ begin
     AddWarning ('Missing . after loop variable ' + LoopVar.LoopVarTokenStr);
 end;
 
-function TRlxRazorProcessor.EvalDottedValue(TokenStr: string;
+function TRlxRazorProcessor.EvalBooleanDottedValue(TokenStr: string;
   Parser: TCopyParser; Encoding: TEncoding): Boolean;
 var
   TokenAfterDot: string;
@@ -496,7 +496,7 @@ begin
       Result := aLoopDataSet.FieldByName(TokenAfterDot).AsString <> '';  // TODO consider other data types!!!!!!
     if Assigned (aLoopList) then
     begin
-      if EvalObjectProperty (aLoopList[aLoopListItem], TokenAfterDot, bResult) then
+      if EvalBooleanObjectProperty (aLoopList[aLoopListItem], TokenAfterDot, bResult) then
         Result := bResult;
     end;
   end
@@ -505,12 +505,12 @@ begin
     // generic processing
     if DataObjects.TryGetValue (TokenStr, item) then
     begin
-      if EvalObjectProperty (item.TheObject, TokenAfterDot, bResult) then
+      if EvalBooleanObjectProperty (item.TheObject, TokenAfterDot, bResult) then
         Result := bResult;
     end
     else if Assigned (RazorEngine) and RazorEngine.DataObjects.TryGetValue (TokenStr, item) then
     begin
-       if EvalObjectProperty (item.TheObject, TokenAfterDot, bResult) then
+       if EvalBooleanObjectProperty (item.TheObject, TokenAfterDot, bResult) then
         Result := bResult
     end
     else
@@ -519,7 +519,7 @@ begin
   end;
 end;
 
-function TRlxRazorProcessor.EvalLoopDottedValue(LoopVar: TRazLoopVar;
+function TRlxRazorProcessor.EvalBooleanLoopDottedValue(LoopVar: TRazLoopVar;
   Parser: TCopyParser; Encoding: TEncoding): Boolean;
 var
   TokenAfterDot: string;
@@ -531,7 +531,7 @@ begin
   begin
     Parser.SkipToken(True);
     TokenAfterDot := Encoding.GetString(BytesOf(Parser.TokenString));
-    if EvalObjectProperty (LoopVar.CurrentObj, TokenAfterDot, bResult) then
+    if EvalBooleanObjectProperty (LoopVar.CurrentObj, TokenAfterDot, bResult) then
       Result := bResult
     else
       AddWarning ('Missing value ' + TokenAfterDot + ' for loop variable ' + LoopVar.LoopVarTokenStr);
@@ -1139,7 +1139,7 @@ begin
             end
             else
             begin
-              // old razor syntax
+              // old razor syntax (remove?)
               Parser.SkipToToken('{');
               blockAsString := Encoding.GetString
                 (BytesOf(Parser.SkipToToken('}')));
@@ -1155,21 +1155,18 @@ begin
             begin
               Parser.SkipToken(True);
               LoopVar := FLoopVars.Items[followToken];
-              ifValue := EvalLoopDottedValue(LoopVar, Parser, Encoding);
+              ifValue := EvalBooleanLoopDottedValue(LoopVar, Parser, Encoding);
             end
             else
             begin
               Parser.SkipToken(True);
-              ifValue := EvalDottedValue(followToken, Parser, Encoding);
+              ifValue := EvalBooleanDottedValue(followToken, Parser, Encoding);
             end;
             Parser.SkipToken(True);
 
             if Parser.Token = '{' then
             begin
               blockAsString := FindMatchingClosingBrace;
-//              Encoding.GetString
-//                (BytesOf(Parser.SkipToToken('}')));
-//              Parser.SkipToken(True);
               if ifValue then
               begin
                 // process the block
@@ -1280,7 +1277,7 @@ begin
       anObj.ClassName + ' object';
 end;
 
-function TRlxRazorProcessor.EvalObjectProperty (anObj: TObject; const propName: string;
+function TRlxRazorProcessor.EvalBooleanObjectProperty (anObj: TObject; const propName: string;
   var Value: Boolean): Boolean;
 var
   context: TRttiCOntext;

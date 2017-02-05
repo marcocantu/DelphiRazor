@@ -32,21 +32,70 @@ type
     procedure TestAddWarning;
     procedure TestProcessRequest;
     procedure TestGetLangFormats;
+
+    // 5. templates
   end;
   // Test methods for class TRlxRazorProcessor
 
   TestTRlxRazorProcessor = class(TTestCase)
   strict private
     FRlxRazorProcessor: TRlxRazorProcessor;
+  private
+    procedure TestValueHandler (Sender: TObject; const ObjectName: string;
+      const FieldName: string; var ReplaceText: string);
   public
     procedure SetUp; override;
     procedure TearDown; override;
   published
+    // 1. basic processing
     procedure TestDoBlock;
     procedure TestDoubleAt;
+
+    // 2. values and dictionary
+    procedure TestValueEvent;
+    procedure TestAddToDictionary;
+    procedure TestValueFromDictionary;
+    // add test for db data access
+
+    // 3. if
+    procedure TestIfTrue;
+    procedure TestIfFalse;
+    procedure TestIfEmptyString;
+    procedure TestIfNotEmptyString;
+    // add tests for booelan evaluation of numeric values
+
+    // 4. foreach
+    procedure TestForIfList;
+    // add a database foreach test
+    // add a nested foreach test
+
+    // 5. lang
+
+    // 6. admin stuff
+
   end;
 
 implementation
+
+const
+  SampleObjectName = 'AnObject';
+  SampleFieldName = 'AField';
+  SampleFieldValue = 'AValue';
+  SampleBoolFieldName = 'ABool';
+
+type
+  TSimpleObj = class
+  private
+    FAField: string;
+    FABool: Boolean;
+    procedure SetAField(const Value: string);
+    procedure SetABool(const Value: Boolean);
+  public
+    property AField: string read FAField write SetAField;
+    property ABool: Boolean read FABool write SetABool;
+  end;
+
+
 
 procedure TestTRlxRazorEngine.SetUp;
 begin
@@ -144,12 +193,29 @@ begin
   FRlxRazorProcessor := nil;
 end;
 
+procedure TestTRlxRazorProcessor.TestAddToDictionary;
+var
+  simpleObj: TSimpleObj;
+begin
+  // add non-owned object to processor
+  simpleObj := TSimpleObj.Create;
+  try
+    FRlxRazorProcessor.AddToDictionary(SampleObjectName, SimpleObj, False);
+    CheckEquals (FRlxRazorProcessor.DataObjects.Count, 1);
+    CheckEquals (FRlxRazorProcessor.InDictionary (SampleObjectName), True);
+    FRlxRazorProcessor.DataObjects.Remove(SampleObjectName);
+    CheckEquals (FRlxRazorProcessor.DataObjects.Count, 0);
+  finally
+    simpleObj.Free;
+  end;
+end;
 
 procedure TestTRlxRazorProcessor.TestDoBlock;
 var
   ReturnValue: string;
   strBlock: string;
 begin
+  // generic text should remain the same after processing
   strBlock := 'Anything';
   ReturnValue := FRlxRazorProcessor.DoBlock(strBlock);
   CheckEquals (strBlock, ReturnValue);
@@ -160,9 +226,166 @@ var
   ReturnValue: string;
   strBlock: string;
 begin
+  // double @@ shoudl be returned as single @
   strBlock := 'Anything @something';
   ReturnValue := FRlxRazorProcessor.DoBlock(DoubleAtSymbol (strBlock));
   CheckEquals (strBlock, ReturnValue);
+end;
+
+procedure TestTRlxRazorProcessor.TestForIfList;
+var
+  list: TObjectList;
+  simpleObj: TSimpleObj;
+  strBlock: string;
+  ReturnValue: string;
+
+begin
+  // create a list with 2 objects
+  list := TObjectList.Create (True); //owns objects
+  simpleObj := TSimpleObj.Create;
+  simpleObj.AField := 'one';
+  list.Add(simpleObj);
+  simpleObj := TSimpleObj.Create;
+  simpleObj.AField := 'two';
+  list.Add(simpleObj);
+  try
+    FRlxRazorProcessor.AddToDictionary('list', list, False);
+
+    strBlock := '@foreach (var item in list) {@item.AField,}';
+    ReturnValue := Trim(FRlxRazorProcessor.DoBlock(strBlock));
+    CheckEquals ('one, two,', ReturnValue);
+
+    FRlxRazorProcessor.DataObjects.Remove('list');
+  finally
+    list.Free;
+  end;
+
+end;
+
+procedure TestTRlxRazorProcessor.TestIfEmptyString;
+var
+  ReturnValue: string;
+  strBlock: string;
+  simpleObj: TSimpleObj;
+begin
+  simpleObj := TSimpleObj.Create;
+  try
+    FRlxRazorProcessor.AddToDictionary(SampleObjectName, SimpleObj, False);
+    strBlock := '@if ' + SampleObjectName + '.' + SampleFieldName + ' {Hello}';
+    ReturnValue := Trim(FRlxRazorProcessor.DoBlock(strBlock));
+    CheckEquals ('', ReturnValue);
+    FRlxRazorProcessor.DataObjects.Remove(SampleObjectName);
+  finally
+    simpleObj.Free;
+  end;
+end;
+
+procedure TestTRlxRazorProcessor.TestIfFalse;
+var
+  ReturnValue: string;
+  strBlock: string;
+  simpleObj: TSimpleObj;
+begin
+  simpleObj := TSimpleObj.Create;
+  try
+    simpleObj.ABool := False;
+    FRlxRazorProcessor.AddToDictionary(SampleObjectName, SimpleObj, False);
+    strBlock := '@if ' + SampleObjectName + '.' + SampleBoolFieldName + ' {Hello}';
+    ReturnValue := Trim(FRlxRazorProcessor.DoBlock(strBlock));
+    CheckEquals ('', ReturnValue);
+    FRlxRazorProcessor.DataObjects.Remove(SampleObjectName);
+  finally
+    simpleObj.Free;
+  end;
+end;
+
+procedure TestTRlxRazorProcessor.TestIfNotEmptyString;
+var
+  ReturnValue: string;
+  strBlock: string;
+  simpleObj: TSimpleObj;
+begin
+  simpleObj := TSimpleObj.Create;
+  try
+    simpleObj.AField := 'something';
+    FRlxRazorProcessor.AddToDictionary(SampleObjectName, SimpleObj, False);
+    strBlock := '@if ' + SampleObjectName + '.' + SampleFieldName + ' {Hello}';
+    ReturnValue := Trim(FRlxRazorProcessor.DoBlock(strBlock));
+    CheckEquals ('Hello', ReturnValue);
+    FRlxRazorProcessor.DataObjects.Remove(SampleObjectName);
+  finally
+    simpleObj.Free;
+  end;
+end;
+
+procedure TestTRlxRazorProcessor.TestIfTrue;
+var
+  ReturnValue: string;
+  strBlock: string;
+  simpleObj: TSimpleObj;
+begin
+  simpleObj := TSimpleObj.Create;
+  try
+    simpleObj.ABool := True;
+    FRlxRazorProcessor.AddToDictionary(SampleObjectName, SimpleObj, False);
+    strBlock := '@if ' + SampleObjectName + '.' + SampleBoolFieldName + ' {Hello}';
+    ReturnValue := Trim(FRlxRazorProcessor.DoBlock(strBlock));
+    CheckEquals ('Hello', ReturnValue);
+    FRlxRazorProcessor.DataObjects.Remove(SampleObjectName);
+  finally
+    simpleObj.Free;
+  end;
+end;
+
+procedure TestTRlxRazorProcessor.TestValueEvent;
+var
+  ReturnValue: string;
+  strBlock: string;
+begin
+  FRlxRazorProcessor.OnValue := TestValueHandler;
+  strBlock := 'Anything @' + SampleObjectName + '.' + SampleFieldName;
+  ReturnValue := FRlxRazorProcessor.DoBlock(strBlock);
+  CheckEquals ('Anything ' + SampleFieldValue, ReturnValue);
+end;
+
+procedure TestTRlxRazorProcessor.TestValueFromDictionary;
+var
+  simpleObj: TSimpleObj;
+  strBlock: string;
+  ReturnValue: string;
+begin
+  // add non-owned object to processor
+  simpleObj := TSimpleObj.Create;
+  try
+    simpleObj.AField := SampleFieldValue;
+    FRlxRazorProcessor.AddToDictionary(SampleObjectName, SimpleObj, False);
+    strBlock := 'Anything @' + SampleObjectName + '.' + SampleFieldName;
+    ReturnValue := FRlxRazorProcessor.DoBlock(strBlock);
+    CheckEquals ('Anything ' + SampleFieldValue, ReturnValue);
+    FRlxRazorProcessor.DataObjects.Remove(SampleObjectName);
+  finally
+    simpleObj.Free;
+  end;
+end;
+
+procedure TestTRlxRazorProcessor.TestValueHandler(Sender: TObject;
+  const ObjectName, FieldName: string; var ReplaceText: string);
+begin
+  if SameText (ObjectName, SampleObjectName) and
+    SameText (FieldName, SampleFieldName) then
+  ReplaceText := SampleFieldValue;
+end;
+
+{ TSimpleObj }
+
+procedure TSimpleObj.SetABool(const Value: Boolean);
+begin
+  FABool := Value;
+end;
+
+procedure TSimpleObj.SetAField(const Value: string);
+begin
+  FAField := Value;
 end;
 
 initialization
