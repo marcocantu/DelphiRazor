@@ -48,3 +48,5 @@ Temporary Items
 *.dcu
 *.local
 test/Win32/Debug/RazorTests.exe
+*.stat
+*.identcache
