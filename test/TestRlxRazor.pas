@@ -43,6 +43,8 @@ type
   private
     procedure TestValueHandler (Sender: TObject; const ObjectName: string;
       const FieldName: string; var ReplaceText: string);
+    procedure RunLoginRequiredScript;
+    procedure RunLoginPermissionScript;
   public
     procedure SetUp; override;
     procedure TearDown; override;
@@ -71,7 +73,11 @@ type
 
     // 5. lang
 
-    // 6. admin stuff
+    // 6. login stuff
+    procedure TestIsLogged;
+    procedure TestIsNotLogged;
+    procedure TestPermission;
+    procedure TestWrongPermission;
 
   end;
 
@@ -180,6 +186,22 @@ begin
   // TODO: Setup method call parameters
   // ReturnValue := FRlxRazorEngine.GetLangFormats(language_id);
   // TODO: Validate method results
+end;
+
+procedure TestTRlxRazorProcessor.RunLoginPermissionScript;
+var
+  strBlock: string;
+begin
+  strBlock := 'Something @LoginRequired.MyGroup else';
+  strBlock := FRlxRazorProcessor.DoBlock(strBlock);
+end;
+
+procedure TestTRlxRazorProcessor.RunLoginRequiredScript;
+var
+  strBlock: string;
+begin
+  strBlock := 'Something @LoginRequired else';
+  strBlock := FRlxRazorProcessor.DoBlock(strBlock);
 end;
 
 procedure TestTRlxRazorProcessor.SetUp;
@@ -337,6 +359,35 @@ begin
   end;
 end;
 
+procedure TestTRlxRazorProcessor.TestIsLogged;
+var
+  strBlock: string;
+  ReturnValue: string;
+begin
+  FRlxRazorProcessor.UserLoggedIn := True;
+  strBlock := 'Something @LoginRequired else';
+  ReturnValue := FRlxRazorProcessor.DoBlock(strBlock);
+  CheckEquals('Something  else', ReturnValue);
+end;
+
+procedure TestTRlxRazorProcessor.TestIsNotLogged;
+begin
+  FRlxRazorProcessor.UserLoggedIn := False;
+  CheckException(RunLoginRequiredScript, ERlxLoginRequired);
+end;
+
+procedure TestTRlxRazorProcessor.TestPermission;
+var
+  strBlock: string;
+  ReturnValue: string;
+begin
+  FRlxRazorProcessor.UserLoggedIn := True;
+  FRlxRazorProcessor.UserRoles := 'Full, MyGroup, More';
+  strBlock := 'Something @LoginRequired.MyGroup else';
+  ReturnValue := FRlxRazorProcessor.DoBlock(strBlock);
+  CheckEquals('Something  else', ReturnValue);
+end;
+
 procedure TestTRlxRazorProcessor.TestValueEvent;
 var
   ReturnValue: string;
@@ -372,8 +423,15 @@ procedure TestTRlxRazorProcessor.TestValueHandler(Sender: TObject;
   const ObjectName, FieldName: string; var ReplaceText: string);
 begin
   if SameText (ObjectName, SampleObjectName) and
-    SameText (FieldName, SampleFieldName) then
-  ReplaceText := SampleFieldValue;
+      SameText (FieldName, SampleFieldName) then
+    ReplaceText := SampleFieldValue;
+end;
+
+procedure TestTRlxRazorProcessor.TestWrongPermission;
+begin
+  FRlxRazorProcessor.UserLoggedIn := False;
+  FRlxRazorProcessor.UserRoles := '';
+  CheckException(RunLoginPermissionScript, ERlxLoginRequired);
 end;
 
 { TSimpleObj }
