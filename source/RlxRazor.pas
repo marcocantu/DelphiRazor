@@ -474,7 +474,11 @@ begin
   begin
     Parser.SkipToken(True);
     TokenAfterDot := Encoding.GetString(BytesOf(Parser.TokenString));
-    if GetObjectProperty (LoopVar.CurrentObj, TokenAfterDot, strResult) then
+
+    if LoopVar.LoopObject is TDataSet then
+      Result := (LoopVar.LoopObject as TDataSet).
+        FieldByName(TokenAfterDot).AsString
+    else if GetObjectProperty (LoopVar.CurrentObj, TokenAfterDot, strResult) then
       Result := strResult
     else
       AddWarning ('Missing value ' + TokenAfterDot + ' for loop variable ' + LoopVar.LoopVarTokenStr);

@@ -53,3 +53,4 @@ test/Win32/Debug/RazorTests.exe
 *.o
 *.exe
 demos/WBConsole/Linux64/Debug/WBConsole
+*.~1~

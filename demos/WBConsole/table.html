@@ -1,10 +1,11 @@
 
-   <h2>Employees</h2>
-   
-   <ul>
-@foreach employee {
-  <li>@loop.FirstName @loop.LastName (@loop.PhoneExt)</li>
+<h2>Employees</h2>
+
+<ul>
+
+@foreach (var emp in employee) {
+  <li>@emp.FirstName @emp.LastName (@emp.PhoneExt)</li>
 }
-    
-   </ul>
+
+</ul>
 

@@ -47,15 +47,10 @@ var
   filename: string;
 begin
   filename := './employee.fds';
-  if not FileExists (filename) then
-    writeln ('Missing file ' + filename)
-  else
+  if not FDMemTable1.Active then
   begin
-    if not FDMemTable1.Active then
-    begin
-      FDMemTable1.LoadFromFile(filename);
-      FDMemTable1.Open;
-    end;
+    FDMemTable1.LoadFromFile(filename);
+    FDMemTable1.Open;
   end;
 
   RlxRazorProcessor1.AddToDictionary('employee', FDMemTable1, False);
