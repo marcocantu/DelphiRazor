@@ -17,8 +17,7 @@ unit RlxRazor;
 interface
 
 uses
-  Classes, HTTPProd, DB, HTTPApp, SysUtils, CopyPrsr, Generics.Collections,
-  Contnrs;
+  Classes, HTTPProd, DB, HTTPApp, SysUtils, CopyPrsr, Generics.Collections;
 
 type
   ERlxLoginRequired = class (Exception);
@@ -262,7 +261,7 @@ type
     FLoopVars: TRazorLoopVars;
     FAddedPages: TStringList;
     // temps for loops old version
-    aLoopList: TObjectList;
+    aLoopList: TList <TObject>;
     aLoopListItem: Integer;
     aLoopDataSet: TDataSet;
     FUserLoggedIn: Boolean;
@@ -318,7 +317,7 @@ type
     constructor Create(Owner: TComponent); override;
     destructor Destroy; override;
     function Content: string; override;
-    function DoBlock(const strBlock: string; Encoding: TEncoding = nil): string;
+    function DoBlock(const strBlock: RawByteString; Encoding: TEncoding = nil): string;
     procedure AddToDictionary (aName: string; theObject: TObject; Owned: Boolean = True); overload;
     procedure AddToDictionary (aName: string; aInitProc: TInitFunction); overload;
     function InDictionary (aName: string): Boolean;
@@ -359,6 +358,16 @@ uses
 
 const
   strFileNotFound = 'filenotfound';
+
+// from SysUtils, should be fine also for NextGen!
+function BytesOf(const Val: RawByteString): TBytes;
+var
+  Len: Integer;
+begin
+  Len := Length(Val);
+  SetLength(Result, Len);
+  Move(Val[1], Result[0], Len);
+end;
 
 { TRlxRazorProcessor }
 
@@ -409,7 +418,8 @@ end;
 function TRlxRazorProcessor.ProcessDottedValue(TokenStr: string;
   Parser: TCopyParser; Encoding: TEncoding): string;
 var
-  TokenAfterDot, strResult: string;
+  TokenAfterDot: string;
+  strResult: string;
   item: TRazDictItem;
 begin
   Result := '';
@@ -448,7 +458,7 @@ begin
   // reparse for double processing
   if Pos ('@', Result) > 0 then
   begin
-    Result := DoBlock (Result, Encoding);
+    Result := DoBlock (RawByteString(Result), Encoding);
   end;
 end;
 
@@ -479,7 +489,7 @@ var
   TokenAfterDot: string;
   bResult: Boolean;
   item: TRazDictItem;
-  dictObj: TObject;
+  //dictObj: TObject;
 begin
   Result := False;
   // if followed by ., read the next element
@@ -567,14 +577,18 @@ begin
   begin
     if Item.Owned then
     begin
+{$IFNDEF NEXTGEN}
       Item.TheObject.Free;
+{$ENDIF}
       Item.TheObject := nil;
     end;
+{$IFNDEF NEXTGEN}
     Item.Free;
+{$ENDIF}
   end;
 end;
 
-function TRlxRazorProcessor.DoBlock(const strBlock: string; Encoding: TEncoding): string;
+function TRlxRazorProcessor.DoBlock(const strBlock: RawByteString; Encoding: TEncoding): string;
 var
   strStream: TStringStream;
 begin
@@ -583,7 +597,7 @@ begin
   if not Assigned (Encoding) then
     Encoding := TEncoding.Default;
 
-  strStream := TStringStream.Create(strBlock, Encoding);
+  strStream := TStringStream.Create(Encoding.GetString(BytesOf(strBlock)), Encoding);
   try
     Result := RazorContentFromStream(strStream);
   finally
@@ -837,9 +851,9 @@ begin
      Exit;
     end;
 
-    if Assigned (item) and (item.TheObject is TObjectList) then
+    if Assigned (item) and (item.TheObject is TList <TObject>) then
     begin
-      aLoopList := item.TheObject as TObjectList;
+      aLoopList := item.TheObject as TList <TObject>;
       for I := 0 to aLoopList.Count - 1 do
       begin
         aLoopListItem := I;
@@ -1087,7 +1101,7 @@ begin
               (BytesOf(Parser.SkipToToken('}')));
             Parser.SkipToken(True);
             // process the block
-            ParsedExtraHeader := DoBlock(blockAsString, Encoding);
+            ParsedExtraHeader := DoBlock(RawByteString(blockAsString), Encoding);
           end
           else if SameText (TokenStr, 'RenderBody') then
           begin
@@ -1170,7 +1184,7 @@ begin
               if ifValue then
               begin
                 // process the block
-                OutStream.WriteString(DoBlock(blockAsString, Encoding));
+                OutStream.WriteString(DoBlock(RawByteString(blockAsString), Encoding));
               end;
             end
             else
@@ -1251,7 +1265,10 @@ var
 begin
   Result := False;
   if not Assigned (anObj) then
+  begin
     propValue := 'Property ' + propname + ' not found in NULL object';
+    Exit;
+  end;
   aProperty := context.GetType(anObj.ClassInfo).GetProperty (propname);
   if Assigned (aProperty) then
   begin
@@ -1483,10 +1500,14 @@ begin
   begin
     if Item.Owned then
     begin
+{$IFNDEF NEXTGEN}
       Item.TheObject.Free;
+{$ENDIF}
       Item.TheObject := nil;
     end;
+{$IFNDEF NEXTGEN}
     Item.Free;
+{$ENDIF}
   end;
 end;
 
@@ -1548,12 +1569,13 @@ function TRlxRazorEngine.ProcessRequest(Request: TWebRequest;
 var
   pathInfo: string;
   razorProc: TRlxRazorProcessor;
-  sList, sInFolderList, sBasePathList: TStringList;
+  sList: TStringList;
+  //, sInFolderList, sBasePathList: TStringList;
   ext: string;
   pageInfo: TPageInfo;
   FilePath, subFolder, strAlias: string;
   execData: TRazorExecData;
-  LIndex: Integer;
+  // LIndex: Integer;
 begin
   pathInfo := Trim(string(Request.InternalPathInfo));
   // normalize path, remove initial /
@@ -1911,12 +1933,12 @@ begin
   Result := True; // there is more
   Inc (FCurrPos);
 
-  if (FLoopObject is TObjectList) then
+  if (FLoopObject is TList <TObject>) then
   begin
-    if (FCurrPos >= TObjectList(FLoopObject).Count) then
+    if (FCurrPos >= TList <TObject>(FLoopObject).Count) then
       Result := False // done
     else
-      CurrentObj := TObjectList(FLoopObject) [FCurrPos];
+      CurrentObj := TList <TObject>(FLoopObject) [FCurrPos];
   end
   else if FLoopObject is TDataSet then
   begin

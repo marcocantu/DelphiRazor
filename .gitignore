@@ -50,3 +50,6 @@ Temporary Items
 test/Win32/Debug/RazorTests.exe
 *.stat
 *.identcache
+*.o
+*.exe
+demos/WBConsole/Linux64/Debug/WBConsole

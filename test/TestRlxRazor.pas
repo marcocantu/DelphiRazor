@@ -1,4 +1,4 @@
-unit TestRlxRazor;
+﻿unit TestRlxRazor;
 {
 
   Delphi DUnit Test Case
@@ -52,6 +52,7 @@ type
     // 1. basic processing
     procedure TestDoBlock;
     procedure TestDoubleAt;
+    procedure TestUnicode;
 
     // 2. values and dictionary
     procedure TestValueEvent;
@@ -256,14 +257,14 @@ end;
 
 procedure TestTRlxRazorProcessor.TestForIfList;
 var
-  list: TObjectList;
+  list: TList<TObject>;
   simpleObj: TSimpleObj;
   strBlock: string;
   ReturnValue: string;
 
 begin
   // create a list with 2 objects
-  list := TObjectList.Create (True); //owns objects
+  list := TList<TObject>.Create; //owns objects
   simpleObj := TSimpleObj.Create;
   simpleObj.AField := 'one';
   list.Add(simpleObj);
@@ -386,6 +387,17 @@ begin
   strBlock := 'Something @LoginRequired.MyGroup else';
   ReturnValue := FRlxRazorProcessor.DoBlock(strBlock);
   CheckEquals('Something  else', ReturnValue);
+end;
+
+procedure TestTRlxRazorProcessor.TestUnicode;
+var
+  ReturnValue: string;
+  strBlock: UTF8String;
+begin
+  // generic text should remain the same after processing
+  strBlock := 'âäçíïòýąÈËϘϟϡڏڧۋﻙﻵ';
+  ReturnValue := FRlxRazorProcessor.DoBlock(strBlock, TEncoding.UTF8);
+  CheckEquals (string(strBlock), ReturnValue);
 end;
 
 procedure TestTRlxRazorProcessor.TestValueEvent;
