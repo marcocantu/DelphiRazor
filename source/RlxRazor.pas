@@ -601,7 +601,7 @@ begin
   if not Assigned (Encoding) then
     Encoding := TEncoding.Default;
 
-  strStream := TStringStream.Create(strBlock, Encoding);
+  strStream := TStringStream.Create(string(strBlock), Encoding);
   try
     Result := RazorContentFromStream(strStream);
   finally
@@ -1105,7 +1105,7 @@ begin
               (BytesOf(Parser.SkipToToken('}')));
             Parser.SkipToken(True);
             // process the block
-            ParsedExtraHeader := DoBlock(blockAsString, Encoding);
+            ParsedExtraHeader := DoBlock(RawByteString(blockAsString), Encoding);
           end
           else if SameText (TokenStr, 'RenderBody') then
           begin
@@ -1188,7 +1188,7 @@ begin
               if ifValue then
               begin
                 // process the block
-                OutStream.WriteString(DoBlock(blockAsString, Encoding));
+                OutStream.WriteString(DoBlock(RawByteString(blockAsString), Encoding));
               end;
             end
             else
