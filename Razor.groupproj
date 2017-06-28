@@ -1,0 +1,48 @@
+﻿<Project xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+    <PropertyGroup>
+        <ProjectGuid>{1565C4B7-AD56-4674-B666-AA5D8A425B5D}</ProjectGuid>
+    </PropertyGroup>
+    <ItemGroup>
+        <Projects Include="test\RazorTests.dproj">
+            <Dependencies/>
+        </Projects>
+        <Projects Include="source\RazorPackageR102.dproj">
+            <Dependencies/>
+        </Projects>
+    </ItemGroup>
+    <ProjectExtensions>
+        <Borland.Personality>Default.Personality.12</Borland.Personality>
+        <Borland.ProjectType/>
+        <BorlandProject>
+            <Default.Personality/>
+        </BorlandProject>
+    </ProjectExtensions>
+    <Target Name="RazorTests">
+        <MSBuild Projects="test\RazorTests.dproj"/>
+    </Target>
+    <Target Name="RazorTests:Clean">
+        <MSBuild Projects="test\RazorTests.dproj" Targets="Clean"/>
+    </Target>
+    <Target Name="RazorTests:Make">
+        <MSBuild Projects="test\RazorTests.dproj" Targets="Make"/>
+    </Target>
+    <Target Name="RazorPackageR102">
+        <MSBuild Projects="source\RazorPackageR102.dproj"/>
+    </Target>
+    <Target Name="RazorPackageR102:Clean">
+        <MSBuild Projects="source\RazorPackageR102.dproj" Targets="Clean"/>
+    </Target>
+    <Target Name="RazorPackageR102:Make">
+        <MSBuild Projects="source\RazorPackageR102.dproj" Targets="Make"/>
+    </Target>
+    <Target Name="Build">
+        <CallTarget Targets="RazorTests;RazorPackageR102"/>
+    </Target>
+    <Target Name="Clean">
+        <CallTarget Targets="RazorTests:Clean;RazorPackageR102:Clean"/>
+    </Target>
+    <Target Name="Make">
+        <CallTarget Targets="RazorTests:Make;RazorPackageR102:Make"/>
+    </Target>
+    <Import Project="$(BDS)\Bin\CodeGear.Group.Targets" Condition="Exists('$(BDS)\Bin\CodeGear.Group.Targets')"/>
+</Project>

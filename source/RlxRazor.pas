@@ -17,8 +17,7 @@ unit RlxRazor;
 interface
 
 uses
-  Classes, HTTPProd, DB, HTTPApp, SysUtils, CopyPrsr, Generics.Collections,
-  Contnrs;
+  Classes, HTTPProd, DB, HTTPApp, SysUtils, CopyPrsr, Generics.Collections;
 
 type
   ERlxLoginRequired = class (Exception);
@@ -262,7 +261,7 @@ type
     FLoopVars: TRazorLoopVars;
     FAddedPages: TStringList;
     // temps for loops old version
-    aLoopList: TObjectList;
+    aLoopList: TList <TObject>;
     aLoopListItem: Integer;
     aLoopDataSet: TDataSet;
     FUserLoggedIn: Boolean;
@@ -279,7 +278,7 @@ type
     procedure SetRazorValueEvent(const Value: TRazorValueEvent);
     function ProcessDottedValue(TokenStr: string; Parser: TCopyParser;
       Encoding: TEncoding): string;
-    function EvalDottedValue(TokenStr: string; Parser: TCopyParser;
+    function EvalBooleanDottedValue(TokenStr: string; Parser: TCopyParser;
       Encoding: TEncoding): Boolean;
     procedure SetOnLang(const Value: TRazorLanguageEvent);
     procedure SetRazorWarnEvent(const Value: TRazorWarnEvent);
@@ -297,9 +296,9 @@ type
     function GetSubObject(anObj: TObject; const propName: string; var retObj: TObject): Boolean;
     function GetLoopOrDictionaryObject(const LoopObjTokenStr, LoopVarTokenStr: string): TObject;
     function GetCurrenctObject(const LoopVarTokenStr: string): TObject;
-    function EvalLoopDottedValue(LoopVar: TRazLoopVar; Parser: TCopyParser;
+    function EvalBooleanLoopDottedValue(LoopVar: TRazLoopVar; Parser: TCopyParser;
       Encoding: TEncoding): Boolean;
-    function EvalObjectProperty(anObj: TObject; const propName: string;
+    function EvalBooleanObjectProperty(anObj: TObject; const propName: string;
       var Value: Boolean): Boolean;
   protected
     function RazorContentFromStream(AStream: TStream): string;
@@ -318,7 +317,7 @@ type
     constructor Create(Owner: TComponent); override;
     destructor Destroy; override;
     function Content: string; override;
-    function DoBlock(const strBlock: string; Encoding: TEncoding = nil): string;
+    function DoBlock(const strBlock: RawByteString; Encoding: TEncoding = nil): string;
     procedure AddToDictionary (aName: string; theObject: TObject; Owned: Boolean = True); overload;
     procedure AddToDictionary (aName: string; aInitProc: TInitFunction); overload;
     function InDictionary (aName: string): Boolean;
@@ -359,6 +358,16 @@ uses
 
 const
   strFileNotFound = 'filenotfound';
+
+// from SysUtils, should be fine also for NextGen!
+function BytesOf(const Val: RawByteString): TBytes;
+var
+  Len: Integer;
+begin
+  Len := Length(Val);
+  SetLength(Result, Len);
+  Move(Val[1], Result[0], Len);
+end;
 
 { TRlxRazorProcessor }
 
@@ -409,7 +418,8 @@ end;
 function TRlxRazorProcessor.ProcessDottedValue(TokenStr: string;
   Parser: TCopyParser; Encoding: TEncoding): string;
 var
-  TokenAfterDot, strResult: string;
+  TokenAfterDot: string;
+  strResult: string;
   item: TRazDictItem;
 begin
   Result := '';
@@ -448,7 +458,7 @@ begin
   // reparse for double processing
   if Pos ('@', Result) > 0 then
   begin
-    Result := DoBlock (Result, Encoding);
+    Result := DoBlock (RawByteString(Result), Encoding);
   end;
 end;
 
@@ -464,7 +474,11 @@ begin
   begin
     Parser.SkipToken(True);
     TokenAfterDot := Encoding.GetString(BytesOf(Parser.TokenString));
-    if GetObjectProperty (LoopVar.CurrentObj, TokenAfterDot, strResult) then
+
+    if LoopVar.LoopObject is TDataSet then
+      Result := (LoopVar.LoopObject as TDataSet).
+        FieldByName(TokenAfterDot).AsString
+    else if GetObjectProperty (LoopVar.CurrentObj, TokenAfterDot, strResult) then
       Result := strResult
     else
       AddWarning ('Missing value ' + TokenAfterDot + ' for loop variable ' + LoopVar.LoopVarTokenStr);
@@ -473,12 +487,13 @@ begin
     AddWarning ('Missing . after loop variable ' + LoopVar.LoopVarTokenStr);
 end;
 
-function TRlxRazorProcessor.EvalDottedValue(TokenStr: string;
+function TRlxRazorProcessor.EvalBooleanDottedValue(TokenStr: string;
   Parser: TCopyParser; Encoding: TEncoding): Boolean;
 var
   TokenAfterDot: string;
   bResult: Boolean;
   item: TRazDictItem;
+  //dictObj: TObject;
 begin
   Result := False;
   // if followed by ., read the next element
@@ -495,7 +510,7 @@ begin
       Result := aLoopDataSet.FieldByName(TokenAfterDot).AsString <> '';  // TODO consider other data types!!!!!!
     if Assigned (aLoopList) then
     begin
-      if EvalObjectProperty (aLoopList[aLoopListItem], TokenAfterDot, bResult) then
+      if EvalBooleanObjectProperty (aLoopList[aLoopListItem], TokenAfterDot, bResult) then
         Result := bResult;
     end;
   end
@@ -503,15 +518,22 @@ begin
   begin
     // generic processing
     if DataObjects.TryGetValue (TokenStr, item) then
-      Result := GetDictionaryValue(item, TokenAfterDot) <> ''
+    begin
+      if EvalBooleanObjectProperty (item.TheObject, TokenAfterDot, bResult) then
+        Result := bResult;
+    end
     else if Assigned (RazorEngine) and RazorEngine.DataObjects.TryGetValue (TokenStr, item) then
-      Result := GetDictionaryValue(item, TokenAfterDot) <> ''
+    begin
+       if EvalBooleanObjectProperty (item.TheObject, TokenAfterDot, bResult) then
+        Result := bResult
+    end
     else
+      // TODO add an eval method for booleans?
       Result := GetOtherValue(TokenStr, TokenAfterDot) <> '';
   end;
 end;
 
-function TRlxRazorProcessor.EvalLoopDottedValue(LoopVar: TRazLoopVar;
+function TRlxRazorProcessor.EvalBooleanLoopDottedValue(LoopVar: TRazLoopVar;
   Parser: TCopyParser; Encoding: TEncoding): Boolean;
 var
   TokenAfterDot: string;
@@ -523,7 +545,7 @@ begin
   begin
     Parser.SkipToken(True);
     TokenAfterDot := Encoding.GetString(BytesOf(Parser.TokenString));
-    if EvalObjectProperty (LoopVar.CurrentObj, TokenAfterDot, bResult) then
+    if EvalBooleanObjectProperty (LoopVar.CurrentObj, TokenAfterDot, bResult) then
       Result := bResult
     else
       AddWarning ('Missing value ' + TokenAfterDot + ' for loop variable ' + LoopVar.LoopVarTokenStr);
@@ -559,14 +581,18 @@ begin
   begin
     if Item.Owned then
     begin
+{$IFNDEF NEXTGEN}
       Item.TheObject.Free;
+{$ENDIF}
       Item.TheObject := nil;
     end;
+{$IFNDEF NEXTGEN}
     Item.Free;
+{$ENDIF}
   end;
 end;
 
-function TRlxRazorProcessor.DoBlock(const strBlock: string; Encoding: TEncoding): string;
+function TRlxRazorProcessor.DoBlock(const strBlock: RawByteString; Encoding: TEncoding): string;
 var
   strStream: TStringStream;
 begin
@@ -575,7 +601,7 @@ begin
   if not Assigned (Encoding) then
     Encoding := TEncoding.Default;
 
-  strStream := TStringStream.Create(strBlock, Encoding);
+  strStream := TStringStream.Create(string(strBlock), Encoding);
   try
     Result := RazorContentFromStream(strStream);
   finally
@@ -829,9 +855,9 @@ begin
      Exit;
     end;
 
-    if Assigned (item) and (item.TheObject is TObjectList) then
+    if Assigned (item) and (item.TheObject is TList <TObject>) then
     begin
-      aLoopList := item.TheObject as TObjectList;
+      aLoopList := item.TheObject as TList <TObject>;
       for I := 0 to aLoopList.Count - 1 do
       begin
         aLoopListItem := I;
@@ -1079,7 +1105,7 @@ begin
               (BytesOf(Parser.SkipToToken('}')));
             Parser.SkipToken(True);
             // process the block
-            ParsedExtraHeader := DoBlock(blockAsString, Encoding);
+            ParsedExtraHeader := DoBlock(RawByteString(blockAsString), Encoding);
           end
           else if SameText (TokenStr, 'RenderBody') then
           begin
@@ -1131,7 +1157,7 @@ begin
             end
             else
             begin
-              // old razor syntax
+              // old razor syntax (remove?)
               Parser.SkipToToken('{');
               blockAsString := Encoding.GetString
                 (BytesOf(Parser.SkipToToken('}')));
@@ -1147,25 +1173,22 @@ begin
             begin
               Parser.SkipToken(True);
               LoopVar := FLoopVars.Items[followToken];
-              ifValue := EvalLoopDottedValue(LoopVar, Parser, Encoding);
+              ifValue := EvalBooleanLoopDottedValue(LoopVar, Parser, Encoding);
             end
             else
             begin
               Parser.SkipToken(True);
-              ifValue := EvalDottedValue(followToken, Parser, Encoding);
+              ifValue := EvalBooleanDottedValue(followToken, Parser, Encoding);
             end;
             Parser.SkipToken(True);
 
             if Parser.Token = '{' then
             begin
               blockAsString := FindMatchingClosingBrace;
-//              Encoding.GetString
-//                (BytesOf(Parser.SkipToToken('}')));
-//              Parser.SkipToken(True);
               if ifValue then
               begin
                 // process the block
-                OutStream.WriteString(DoBlock(blockAsString, Encoding));
+                OutStream.WriteString(DoBlock(RawByteString(blockAsString), Encoding));
               end;
             end
             else
@@ -1246,7 +1269,10 @@ var
 begin
   Result := False;
   if not Assigned (anObj) then
+  begin
     propValue := 'Property ' + propname + ' not found in NULL object';
+    Exit;
+  end;
   aProperty := context.GetType(anObj.ClassInfo).GetProperty (propname);
   if Assigned (aProperty) then
   begin
@@ -1272,7 +1298,7 @@ begin
       anObj.ClassName + ' object';
 end;
 
-function TRlxRazorProcessor.EvalObjectProperty (anObj: TObject; const propName: string;
+function TRlxRazorProcessor.EvalBooleanObjectProperty (anObj: TObject; const propName: string;
   var Value: Boolean): Boolean;
 var
   context: TRttiCOntext;
@@ -1478,10 +1504,14 @@ begin
   begin
     if Item.Owned then
     begin
+{$IFNDEF NEXTGEN}
       Item.TheObject.Free;
+{$ENDIF}
       Item.TheObject := nil;
     end;
+{$IFNDEF NEXTGEN}
     Item.Free;
+{$ENDIF}
   end;
 end;
 
@@ -1544,10 +1574,12 @@ var
   pathInfo: string;
   razorProc: TRlxRazorProcessor;
   sList: TStringList;
+  //, sInFolderList, sBasePathList: TStringList;
   ext: string;
   pageInfo: TPageInfo;
   FilePath, subFolder, strAlias: string;
   execData: TRazorExecData;
+  // LIndex: Integer;
 begin
   pathInfo := Trim(string(Request.InternalPathInfo));
   // normalize path, remove initial /
@@ -1560,8 +1592,12 @@ begin
     ProcessPath (pathInfo, sList);
 
     // get the extension and remove it from the path elements
-    ext := ExtractFileExt (sList[sList.Count-1]);
-    sList[sList.Count-1] := ChangeFileExt (sList[sList.Count-1], '');
+    ext := '';
+    if sList.Count > 0 then
+    begin
+      ext := ExtractFileExt (sList[sList.Count-1]);
+      sList[sList.Count-1] := ChangeFileExt (sList[sList.Count-1], '');
+    end;
 
     // set .htm as .html
     if ext = '.htm' then
@@ -1637,9 +1673,9 @@ begin
       if SameText (ext, '.js') then
         // TODO: add a property in the component at least with the base path
         // or with a path file mapping
-        FilePath := '../' + inFolder + '/' + pageInfo.Page + '.js'
+        FilePath := ChangeFileExt ('../' + inFolder + '/' + pageInfo.Page, '.js')
       else
-        FilePath := FFilesFolder + subFolder + pageInfo.Page + '.html';
+        FilePath := ChangeFileExt (FFilesFolder + subFolder + pageInfo.Page, '.html');
 
       if not FileExists(FilePath) then
       begin
@@ -1901,12 +1937,12 @@ begin
   Result := True; // there is more
   Inc (FCurrPos);
 
-  if (FLoopObject is TObjectList) then
+  if (FLoopObject is TList <TObject>) then
   begin
-    if (FCurrPos >= TObjectList(FLoopObject).Count) then
+    if (FCurrPos >= TList <TObject>(FLoopObject).Count) then
       Result := False // done
     else
-      CurrentObj := TObjectList(FLoopObject) [FCurrPos];
+      CurrentObj := TList <TObject>(FLoopObject) [FCurrPos];
   end
   else if FLoopObject is TDataSet then
   begin
@@ -2005,3 +2041,4 @@ begin
 end;
 
 end.
+

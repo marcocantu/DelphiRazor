@@ -60,11 +60,12 @@ object WebModule13: TWebModule13
     Top = 48
   end
   object RlxRazorEngine1: TRlxRazorEngine
+    PathInits = <>
     FilesFolder = '..\..\html\'
     TemplatesFolder = '..\..\html\'
     HomePage = 'test.html'
     OnLang = RlxRazorEngine1Lang
-    Left = 288
+    Left = 224
     Top = 48
   end
   object RlxRazorProcessor2: TRlxRazorProcessor
