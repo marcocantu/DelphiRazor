@@ -711,7 +711,7 @@ begin
   Result := Encoding.GetString(BytesOf(Parser.TokenString));
   Parser.SkipToken(True);
   // if followed by ., read the next element
-  if Parser.Token = '.' then
+  while Parser.Token = '.' do
   begin
     Parser.SkipToken(True);
     TokenAfterDot := Encoding.GetString(BytesOf(Parser.TokenString));
