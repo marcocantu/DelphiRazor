@@ -80,6 +80,10 @@ type
     procedure TestPermission;
     procedure TestWrongPermission;
 
+    // 7. extraheader
+    procedure TestExtraHeader;
+    procedure TestExtraHeaderNestedIf;
+    procedure TestExtraHeaderNestedIfWithinIf;
   end;
 
 implementation
@@ -445,6 +449,84 @@ begin
   FRlxRazorProcessor.UserRoles := '';
   CheckException(RunLoginPermissionScript, ERlxLoginRequired);
 end;
+
+procedure TestTRlxRazorProcessor.TestExtraHeader;
+var
+  strBlock: string;
+  ReturnValue: string;
+  LRlxRazorEngine: TRlxRazorEngine;
+begin
+  LRlxRazorEngine := TRlxRazorEngine.Create(nil);
+  try
+    strBlock := '@LayoutPage testextraheader'#13#10'@ExtraHeader {TestExtraHeader}';
+    FRlxRazorProcessor.RazorEngine := LRlxRazorEngine;
+    FRlxRazorProcessor.RazorEngine.TemplatesFolder := '..\..\templates\';
+    ReturnValue := FRlxRazorProcessor.DoBlock(strBlock);
+    CheckEquals (' TestExtraHeader', ReturnValue);
+  finally
+    FRlxRazorProcessor.RazorEngine := nil;
+    LRlxRazorEngine.Free;
+  end;
+end;
+
+procedure TestTRlxRazorProcessor.TestExtraHeaderNestedIf;
+var
+  strBlock: string;
+  ReturnValue: string;
+  LRlxRazorEngine: TRlxRazorEngine;
+  simpleObj: TSimpleObj;
+begin
+  simpleObj := TSimpleObj.Create;
+  try
+    simpleObj.ABool := True;
+    FRlxRazorProcessor.AddToDictionary(SampleObjectName, SimpleObj, False);
+    LRlxRazorEngine := TRlxRazorEngine.Create(nil);
+    try
+      strBlock := '@LayoutPage testextraheader'#13#10'@ExtraHeader {@if ' + SampleObjectName + '.' + SampleBoolFieldName
+        + '{TestExtraHeaderNestedIf}}';
+      FRlxRazorProcessor.RazorEngine := LRlxRazorEngine;
+      FRlxRazorProcessor.RazorEngine.TemplatesFolder := '..\..\templates\';
+      ReturnValue := FRlxRazorProcessor.DoBlock(strBlock);
+      FRlxRazorProcessor.DataObjects.Remove(SampleObjectName);
+      CheckEquals ('  TestExtraHeaderNestedIf', ReturnValue);
+    finally
+      FRlxRazorProcessor.RazorEngine := nil;
+      LRlxRazorEngine.Free;
+    end;
+  finally
+    simpleObj.Free;
+  end;
+end;
+
+procedure TestTRlxRazorProcessor.TestExtraHeaderNestedIfWithinIf;
+var
+  strBlock: string;
+  ReturnValue: string;
+  LRlxRazorEngine: TRlxRazorEngine;
+  simpleObj: TSimpleObj;
+begin
+  simpleObj := TSimpleObj.Create;
+  try
+    simpleObj.ABool := True;
+    FRlxRazorProcessor.AddToDictionary(SampleObjectName, SimpleObj, False);
+    LRlxRazorEngine := TRlxRazorEngine.Create(nil);
+    try
+      strBlock := '@LayoutPage testextraheader'#13#10'@ExtraHeader {@if ' + SampleObjectName + '.' + SampleBoolFieldName
+        + '{@if ' + SampleObjectName + '.' + SampleBoolFieldName + '{TestExtraHeaderNestedIfWithinIf}}}';
+      FRlxRazorProcessor.RazorEngine := LRlxRazorEngine;
+      FRlxRazorProcessor.RazorEngine.TemplatesFolder := '..\..\templates\';
+      ReturnValue := FRlxRazorProcessor.DoBlock(strBlock);
+      FRlxRazorProcessor.DataObjects.Remove(SampleObjectName);
+      CheckEquals ('   TestExtraHeaderNestedIfWithinIf', ReturnValue);
+    finally
+      FRlxRazorProcessor.RazorEngine := nil;
+      LRlxRazorEngine.Free;
+    end;
+  finally
+    simpleObj.Free;
+  end;
+end;
+
 
 { TSimpleObj }
 
