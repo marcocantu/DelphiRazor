@@ -1100,12 +1100,14 @@ begin
           end
           else if SameText (TokenStr, 'ExtraHeader') then
           begin
-            // Parser.SkipToToken('{');
-            blockAsString := Encoding.GetString
-              (BytesOf(Parser.SkipToToken('}')));
-            Parser.SkipToken(True);
-            // process the block
-            ParsedExtraHeader := DoBlock(RawByteString(blockAsString), Encoding);
+            if Parser.Token = '{' then
+            begin
+              blockAsString := FindMatchingClosingBrace;
+              // process the block
+              ParsedExtraHeader := DoBlock(RawByteString(blockAsString), Encoding);
+            end
+            else
+              AddWarning('missing { after ExtraHeader');
           end
           else if SameText (TokenStr, 'RenderBody') then
           begin
