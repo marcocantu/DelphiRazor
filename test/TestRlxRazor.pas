@@ -68,9 +68,9 @@ type
     // add tests for booelan evaluation of numeric values
 
     // 4. foreach
-    procedure TestForIfList;
-    // add a database foreach test
-    // add a nested foreach test
+    procedure TestForEachList;
+    procedure TestForEachDataset;
+    procedure TestForEachNestedDatasets;
 
     // 5. lang
 
@@ -83,6 +83,9 @@ type
   end;
 
 implementation
+
+uses
+  FireDAC.Comp.Client;
 
 const
   SampleObjectName = 'AnObject';
@@ -255,7 +258,7 @@ begin
   CheckEquals (strBlock, ReturnValue);
 end;
 
-procedure TestTRlxRazorProcessor.TestForIfList;
+procedure TestTRlxRazorProcessor.TestForEachList;
 var
   list: TList<TObject>;
   simpleObj: TSimpleObj;
@@ -281,6 +284,82 @@ begin
     FRlxRazorProcessor.DataObjects.Remove('list');
   finally
     list.Free;
+  end;
+
+end;
+
+procedure TestTRlxRazorProcessor.TestForEachDataset;
+var
+  strBlock: string;
+  ReturnValue: string;
+  LDataset: TFDMemTable;
+  I: Integer;
+begin
+  LDataset := TFDMemTable.Create(nil);
+  try
+    LDataset.FieldDefs.Add('Name', ftString, 30, True);
+    LDataset.Open;
+    for I := 1 to 3 do
+    begin
+      LDataset.Append;
+      LDataset.FieldByName('Name').AsString := 'Record' + IntToStr(I);
+      LDataset.Post;
+    end;
+
+    FRlxRazorProcessor.AddToDictionary('dataset', LDataset, False);
+
+    strBlock := '@foreach (var item in dataset) {@item.Name,}';
+    ReturnValue := Trim(FRlxRazorProcessor.DoBlock(strBlock));
+    CheckEquals ('Record1, Record2, Record3,', ReturnValue);
+
+    FRlxRazorProcessor.DataObjects.Remove('dataset');
+  finally
+    LDataset.Free;
+  end;
+
+end;
+
+procedure TestTRlxRazorProcessor.TestForEachNestedDatasets;
+var
+  strBlock: string;
+  ReturnValue: string;
+  LDatasetCat: TFDMemTable;
+  LDatasetRec: TFDMemTable;
+  I: Integer;
+begin
+  LDatasetCat := TFDMemTable.Create(nil);
+  LDatasetRec := TFDMemTable.Create(nil);
+  try
+    LDatasetCat.FieldDefs.Add('Name', ftString, 30, True);
+    LDatasetCat.Open;
+    for I := 1 to 2 do
+    begin
+      LDatasetCat.Append;
+      LDatasetCat.FieldByName('Name').AsString := 'Category' + IntToStr(I);
+      LDatasetCat.Post;
+    end;
+
+    LDatasetRec.FieldDefs.Add('Name', ftString, 30, True);
+    LDatasetRec.Open;
+    for I := 1 to 3 do
+    begin
+      LDatasetRec.Append;
+      LDatasetRec.FieldByName('Name').AsString := 'Record' + IntToStr(I);
+      LDatasetRec.Post;
+    end;
+
+    FRlxRazorProcessor.AddToDictionary('datasetCat', LDatasetCat, False);
+    FRlxRazorProcessor.AddToDictionary('datasetRec', LDatasetRec, False);
+
+    strBlock := '@foreach (var cat in datasetCat) {@cat.Name: @foreach (var rec in datasetRec) {@rec.Name,}}';
+    ReturnValue := Trim(FRlxRazorProcessor.DoBlock(strBlock));
+    CheckEquals ('Category1:      Record1, Record2, Record3, Category2:      Record1, Record2, Record3,', ReturnValue);
+
+    FRlxRazorProcessor.DataObjects.Remove('datasetRec');
+    FRlxRazorProcessor.DataObjects.Remove('datasetCat');
+  finally
+    LDatasetRec.Free;
+    LDatasetCat.Free;
   end;
 
 end;
