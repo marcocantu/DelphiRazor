@@ -1955,9 +1955,8 @@ begin
     end
     else
     begin
-      if not (TDataSet(FLoopObject).EOF) then
-        TDataSet(FLoopObject).Next
-      else
+      TDataSet(FLoopObject).Next;
+      if TDataSet(FLoopObject).EOF then
         Result := False; // done
     end;
   end;
